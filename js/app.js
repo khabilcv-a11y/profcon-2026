@@ -54,7 +54,7 @@
     main.innerHTML = demoBanner() + '<h2>Enter receipts</h2><p class="sub">Choose your district, say how many receipts you are holding, then fill one row per receipt.</p>' +
       '<div class="card"><div class="grid">' +
       '<div><label for="dist">District</label><select id="dist"><option value="">Loading…</option></select></div>' +
-      '<div><label for="zone">Zone</label><select id="zone"><option value="">Select district first</option></select></div>' +
+      '<div><label for="zone">Zone (optional)</label><select id="zone"><option value="">Select district first</option></select></div>' +
       '<div><label for="cnt">Number of receipts in hand</label><input id="cnt" type="number" min="1" max="200" inputmode="numeric" placeholder="e.g. 5"></div>' +
       '<div><label for="by">Your name (optional)</label><input id="by" maxlength="80"></div>' +
       '<div><button class="primary" id="gen">Add receipt rows</button></div></div></div><div id="rows"></div>';
@@ -70,7 +70,6 @@
     $('#gen').onclick = function () {
       var n = Math.floor(num($('#cnt').value));
       if (!$('#dist').value) return toast('Select a district first', true);
-      if (!$('#zone').value) return toast('Select a zone', true);
       if (n < 1 || n > 200) return toast('Enter a number of receipts between 1 and 200', true);
       while (S.draft.length < n) S.draft.push({ receiptNo: '', amount: '', cash: '', gpay: '', account: '' });
       S.draft.length = n;
@@ -82,7 +81,7 @@
   function zoneOptions(dist, sel) { return zonesOf(dist).map(function (z) { return '<option' + (z.name === sel ? ' selected' : '') + '>' + esc(z.name) + '</option>'; }).join(''); }
   function fillZones() {
     var d = $('#dist').value;
-    $('#zone').innerHTML = d ? '<option value="">Select zone…</option>' + zoneOptions(d, S.zone) : '<option value="">Select district first</option>';
+    $('#zone').innerHTML = d ? '<option value="">No zone / not specified</option>' + zoneOptions(d, S.zone) : '<option value="">Select district first</option>';
   }
   function draftTable() {
     $('#rows').innerHTML = '<div class="tablewrap"><table><thead><tr><th>#</th><th>Receipt no.</th><th class="n">Total amount</th><th class="n">Cash</th><th class="n">GPay</th><th class="n">Account</th><th>Check</th></tr></thead><tbody>' +
@@ -116,15 +115,14 @@
   }
   function submitDraft() {
     if (!$('#dist').value) return toast('Select a district first', true);
-    if (!$('#zone').value) return toast('Select a zone', true);
     if (!draftCheck()) return toast('Fix the rows marked in red first', true);
     var nos = S.draft.map(function (r) { return r.receiptNo.trim(); });
     if (nos.some(function (n, i) { return nos.indexOf(n) !== i; })) return toast('A receipt number is repeated in this list', true);
     var t = sum(S.draft.map(function (r) { return { amount: num(r.amount), cash: num(r.cash), gpay: num(r.gpay), account: num(r.account) }; }));
-    if (!confirm('Submit ' + S.draft.length + ' receipts for ' + $('#zone').value + ', ' + $('#dist').value + '?\nTotal ₹' + inr(t.amount) + ' (Cash ₹' + inr(t.cash) + ', GPay ₹' + inr(t.gpay) + ', Account ₹' + inr(t.account) + ')')) return;
+    if (!confirm('Submit ' + S.draft.length + ' receipts for ' + ($('#zone').value ? $('#zone').value + ', ' : '') + $('#dist').value + '?\nTotal ₹' + inr(t.amount) + ' (Cash ₹' + inr(t.cash) + ', GPay ₹' + inr(t.gpay) + ', Account ₹' + inr(t.account) + ')')) return;
     busy($('#sub'), api.call('addReceipts', { district: $('#dist').value, zone: $('#zone').value, submittedBy: S.by, receipts: S.draft })).then(function (r) {
-      var dn = $('#zone').value + ', ' + $('#dist').value; S.draft = [];
-      main.innerHTML = '<div class="card"><h2 class="ok">✓ ' + r.saved + ' receipts saved</h2><p>Zone: <b>' + esc(dn) + '</b> · Total ₹' + inr(t.amount) + '</p><p class="note">Any correction must be made by the admin.</p><button class="primary" id="again">Enter more receipts</button></div>';
+      var dn = ($('#zone').value ? $('#zone').value + ', ' : '') + $('#dist').value; S.draft = [];
+      main.innerHTML = '<div class="card"><h2 class="ok">✓ ' + r.saved + ' receipts saved</h2><p>Location: <b>' + esc(dn) + '</b> · Total ₹' + inr(t.amount) + '</p><p class="note">Any correction must be made by the admin.</p><button class="primary" id="again">Enter more receipts</button></div>';
       $('#again').onclick = entryView;
     });
   }
@@ -183,14 +181,14 @@
   function editReceipt(r) {
     dlg.innerHTML = '<form method="dialog" id="ef"><h2>Edit receipt</h2><div class="grid" style="margin:12px 0">' +
       '<div><label>District</label><select id="e-district">' + S.districts.map(function (d) { return '<option' + (d.name === r.district ? ' selected' : '') + '>' + esc(d.name) + '</option>'; }).join('') + '</select></div>' +
-      '<div><label>Zone</label><select id="e-zone">' + zoneOptions(r.district, r.zone) + '</select></div>' +
+      '<div><label>Zone</label><select id="e-zone"><option value="">No zone</option>' + zoneOptions(r.district, r.zone) + '</select></div>' +
       '<div><label>Receipt no.</label><input id="e-receiptNo" value="' + esc(r.receiptNo) + '"></div>' +
       ['amount', 'cash', 'gpay', 'account'].map(function (f) { return '<div><label>' + { amount: 'Total amount', cash: 'Cash', gpay: 'GPay', account: 'Account' }[f] + '</label><input type="number" min="0" step="0.01" id="e-' + f + '" value="' + r[f] + '"></div>'; }).join('') +
       '</div><p class="note" id="e-chk"></p><div class="row end"><button type="button" id="e-x">Cancel</button><button class="primary" id="e-s">Save</button></div></form>';
     dlg.showModal();
     function chk() { var d = num($('#e-amount').value) - num($('#e-cash').value) - num($('#e-gpay').value) - num($('#e-account').value); $('#e-chk').innerHTML = Math.abs(d) < 0.01 ? '<span class="ok">✓ Cash + GPay + Account match the total</span>' : '<span class="bad">Difference: ₹' + inr(d) + '</span>'; }
     dlg.oninput = chk; chk();
-    $('#e-district').onchange = function () { $('#e-zone').innerHTML = zoneOptions(this.value, ''); };
+    $('#e-district').onchange = function () { $('#e-zone').innerHTML = '<option value="">No zone</option>' + zoneOptions(this.value, ''); };
     $('#e-x').onclick = function () { dlg.close(); };
     $('#ef').onsubmit = function (e) {
       e.preventDefault();

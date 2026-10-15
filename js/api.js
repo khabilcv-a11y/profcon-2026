@@ -66,7 +66,7 @@
     if (a === 'addReceipts') {
       var dist = s.districts.filter(function (x) { return x.name === d.district; })[0];
       if (!dist) throw new Error('Unknown district');
-      if (!s.zones.some(function (z) { return z.district === dist.name && z.name === d.zone; })) throw new Error('Select a valid zone for ' + dist.name);
+      if (d.zone && !s.zones.some(function (z) { return z.district === dist.name && z.name === d.zone; })) throw new Error('Select a valid zone for ' + dist.name);
       var seen = {};
       var list = d.receipts.map(function (r) {
         var c = clean(r);
@@ -74,7 +74,7 @@
         if (s.receipts.some(function (x) { return x.district === dist.name && String(x.receiptNo) === c.receiptNo; })) throw new Error('Receipt ' + c.receiptNo + ' is already recorded for ' + dist.name);
         seen[c.receiptNo] = 1; return c;
       });
-      list.forEach(function (c) { c.id = uid(); c.district = dist.name; c.zone = d.zone; c.submittedBy = d.submittedBy || ''; c.createdAt = now; c.updatedAt = now; s.receipts.push(c); });
+      list.forEach(function (c) { c.id = uid(); c.district = dist.name; c.zone = d.zone || ''; c.submittedBy = d.submittedBy || ''; c.createdAt = now; c.updatedAt = now; s.receipts.push(c); });
       save(s); return { saved: list.length };
     }
     if (api.token !== 'demo') throw new Error('Session expired. Please log in again.');
@@ -84,8 +84,8 @@
         var c = clean(d.receipt); i = s.receipts.findIndex(function (x) { return x.id === d.receipt.id; });
         if (i < 0) throw new Error('Receipt not found');
         if (s.receipts.some(function (x) { return x.id !== d.receipt.id && x.district === d.receipt.district && String(x.receiptNo) === c.receiptNo; })) throw new Error('Receipt ' + c.receiptNo + ' already exists for ' + d.receipt.district);
-        if (!s.zones.some(function (z) { return z.district === d.receipt.district && z.name === d.receipt.zone; })) throw new Error('Select a valid zone for ' + d.receipt.district);
-        Object.assign(s.receipts[i], c, { district: d.receipt.district, zone: d.receipt.zone, updatedAt: now }); save(s); return true;
+        if (d.receipt.zone && !s.zones.some(function (z) { return z.district === d.receipt.district && z.name === d.receipt.zone; })) throw new Error('Select a valid zone for ' + d.receipt.district);
+        Object.assign(s.receipts[i], c, { district: d.receipt.district, zone: d.receipt.zone || '', updatedAt: now }); save(s); return true;
       case 'deleteReceipt': s.receipts = s.receipts.filter(function (x) { return x.id !== d.id; }); save(s); return true;
       case 'addDistrict':
         var n = String(d.name || '').trim();

@@ -134,6 +134,7 @@ function districtName_(name) {
   return d.name;
 }
 function zoneName_(district, zone) {
+  if (!zone) return '';   // zone is optional
   var z = rows_('Zones').filter(function (x) { return x.district === district && x.name === zone; })[0];
   if (!z) throw new Error('Select a valid zone for ' + district);
   return z.name;
