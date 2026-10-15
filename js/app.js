@@ -275,17 +275,26 @@
     };
   }
 
+  var LOGO = null;
+  (function () {
+    var im = new Image();
+    im.onload = function () { var c = document.createElement('canvas'); c.width = im.width; c.height = im.height; c.getContext('2d').drawImage(im, 0, 0); try { LOGO = c.toDataURL('image/png'); } catch (e) {} };
+    im.src = 'assets/logo-wordmark.png';
+  })();
+
   function buildPdf(R) {
     var doc = new window.jspdf.jsPDF({ unit: 'pt', format: 'a4' }), W = doc.internal.pageSize.getWidth(), M = 36;
-    var NAVY = [29, 63, 143], GOLD = [232, 163, 23], pr = function (n) { return 'Rs. ' + inr(n); };
+    var NAVY = [23, 95, 154], GOLD = [214, 33, 42], pr = function (n) { return 'Rs. ' + inr(n); };
     var sm = summary(), rows = sm.rows.filter(function (r) { return !R.dist || r.name === R.dist; });
     var total = R.dist ? rows[0] || { count: 0, amount: 0, cash: 0, gpay: 0, account: 0 } : sm.total;
-    doc.setFillColor.apply(doc, NAVY); doc.rect(0, 0, W, 78, 'F');
-    doc.setFillColor.apply(doc, GOLD); doc.rect(0, 78, W, 4, 'F');
-    doc.setTextColor(255); doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.text('WISDOM STUDENTS', M, 28);
-    doc.setFontSize(22); doc.text('PROFCON 2026 - Collection & Expense Report', M, 54);
+    if (LOGO) doc.addImage(LOGO, 'PNG', M, 20, 150, 30);
+    else { doc.setTextColor.apply(doc, NAVY); doc.setFont('helvetica', 'bold'); doc.setFontSize(22); doc.text('PROFCON', M, 44); }
+    doc.setTextColor(16, 43, 70); doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.text('30th Edition  |  Wisdom Students', W - M, 32, { align: 'right' });
+    doc.setFontSize(15); doc.text('Collection & Expense Report 2026', W - M, 50, { align: 'right' });
+    doc.setFillColor.apply(doc, NAVY); doc.rect(0, 66, W, 3, 'F');
+    doc.setFillColor.apply(doc, GOLD); doc.rect(0, 69, W * 0.18, 3, 'F');
     doc.setTextColor(60); doc.setFont('helvetica', 'normal'); doc.setFontSize(10);
-    doc.text('Generated: ' + dmy(today()) + '    Scope: ' + (R.dist || 'All districts'), M, 102);
+    doc.text('Generated: ' + dmy(today()) + '    Scope: ' + (R.dist || 'All districts'), M, 98);
 
     var cards = [['Total collection', total.amount], ['Cash', total.cash], ['GPay', total.gpay], ['Account', total.account]];
     if (!R.dist) cards.push(['Expenses', sm.exp], ['Balance', sm.balance]);
@@ -347,7 +356,7 @@
     var pages = doc.getNumberOfPages();
     for (var i = 1; i <= pages; i++) {
       doc.setPage(i); doc.setFontSize(8); doc.setTextColor(130);
-      doc.text('Wisdom Students - PROFCON 2026', M, 822); doc.text('Page ' + i + ' of ' + pages, W - M, 822, { align: 'right' });
+      doc.text('To the Right Goal Through the Right Path  |  Wisdom Students - PROFCON 2026', M, 822); doc.text('Page ' + i + ' of ' + pages, W - M, 822, { align: 'right' });
     }
     return doc;
   }
