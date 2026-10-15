@@ -10,14 +10,14 @@ var MAX_FAILS = 5;             // wrong keys before a 15 minute lock
 
 var TABS = {
   Districts: ['id', 'name'],
-  Receipts:  ['id', 'district', 'receiptNo', 'amount', 'cash', 'gpay', 'account', 'submittedBy', 'createdAt', 'updatedAt'],
+  Zones:     ['id', 'district', 'name'],
+  Receipts:  ['id', 'district', 'zone', 'receiptNo', 'amount', 'cash', 'gpay', 'account', 'submittedBy', 'createdAt', 'updatedAt'],
   Expenses:  ['id', 'date', 'item', 'amount', 'note', 'createdAt'],
   Settings:  ['key', 'value']
 };
 var TEXT_COLS = { Receipts: ['receiptNo'], Expenses: ['date'] };   // keep as text (no auto date / number conversion)
 var NUM_COLS  = { Receipts: ['amount', 'cash', 'gpay', 'account'], Expenses: ['amount'] };
-var SEED_DISTRICTS = ['Thiruvananthapuram', 'Kollam', 'Pathanamthitta', 'Alappuzha', 'Kottayam', 'Idukki', 'Ernakulam',
-  'Thrissur', 'Palakkad', 'Malappuram', 'Kozhikode', 'Wayanad', 'Kannur', 'Kasaragod'];
+var SEED = {"Trivandrum": ["Thiruvananthapuram", "Thiruvananthapuram East", "Kaniyapuram", "Attingal", "Venjaramood", "Nedumangad", "Kattakkada", "Varkala"], "Kollam": ["Kollam", "Karunagappalli", "Pathanapuram"], "Alappuzha": ["Kayamkulam", "Alappuzha", "Kuthiyathodu", "Naduvathu Nagar"], "Kottayam": ["Kottayam", "Kanjirappally", "Erattupetta"], "Idukki": ["Thodupuzha", "Adimaly", "Peerumedu"], "Ernakulam": ["Aluva", "Perumbavoor", "Kothamangalam", "Paravoor", "Ernakulam", "Thripunithura", "Kochi", "Palluruthy", "Kakkanad"], "Thrissur": ["Chavakkad", "Pavaratty", "Kunnamkulam", "Guruvayur", "Thrissur", "Kodungallur", "Kaipamangalam"], "Palakkad": ["Edathanattukara", "Alanallur", "Mannarkkad", "Thachampara", "Olavakode", "Palakkad", "Alathur", "Ottapalam", "Pattambi", "Chittur", "Koppam"], "Malappuram West": ["University", "Peruvallur", "Abdurahman Nager", "Vengara", "Tiroorangadi", "Parappanagadi", "Thanur", "Thanalur", "Kottakkal", "Valavannur", "Randathani", "Moonniyoor"], "Malappuram North": ["Areekode", "Edavannappara", "Pulikkal", "Kondoty", "Mongam", "Malappuram", "Manjeri", "Trikkalangode", "Kavanur", "Anakkayam", "Cherukavu", "Mankada", "Pulpatta", "Keezhuparamba", "Chattipparamba"], "Malappuram East": ["Perintalmanna", "Pandikkad", "Karuvarakund", "Kalikavu", "Amarambalam", "Wandoor", "Edavanna", "Othayi", "Mampad", "Nilamboor", "Chungathara", "Edakkara", "Moothedam", "Angaadipuram", "Aanamangad", "Pattikkad", "Pulamanthole"], "Calicut South": ["Farook", "Kallai", "Beypore", "City", "Mankav", "Medical College", "Karapparamb", "Nanmanda", "Narikuni East", "Atholi", "Kodiyathoor", "Thamarasseri", "Koduvalli", "Mukkam", "Ramanattukara", "Narikuni West"], "Calicut North": ["Balusserry", "Poonur", "Koyilandy", "Payyoli", "Vatakara", "Nadapuram", "Perambra"], "Wayanad": ["Kalpetta", "Bathery", "Mananthavady", "Gudalur"], "Kannur": ["Valapattanam", "Taliparamba", "Irikkoor", "Pazhayangadi", "Payyanur", "Kannur", "Kuthuparamba", "Iritty", "Panoor", "Thalassery", "Kambil", "Chakkarakkal", "Kannavam"], "Kasargode": ["Manjeshwaram", "Kumbala", "Kasaragod", "Uduma", "Kanhangad", "Trikaripur", "Badiyadka", "Cherkkalam", "Uppala", "Bekal", "Parappa"], "Malappuram South": ["Tirur", "Alathiyoor", "Marancheri", "Ponnani", "Koottanad", "Valanjeri", "Changaramkulam", "Paravanna", "Kuttippuram", "Thirunavaya"]};
 
 /* Run this once from the editor: creates the tabs, districts and the default key. */
 function setup() {
@@ -31,7 +31,10 @@ function setup() {
   });
   var first = ss.getSheetByName('Sheet1');
   if (first && first.getLastRow() === 0 && ss.getSheets().length > 1) ss.deleteSheet(first);
-  if (!rows_('Districts').length) SEED_DISTRICTS.forEach(function (n) { append_('Districts', { id: uid_(), name: n }); });
+  if (!rows_('Districts').length) Object.keys(SEED).forEach(function (d) {
+    append_('Districts', { id: uid_(), name: d });
+    SEED[d].forEach(function (z) { append_('Zones', { id: uid_(), district: d, name: z }); });
+  });
   if (!getSetting_('keyHash')) setKey_(DEFAULT_KEY);
 }
 
@@ -54,18 +57,21 @@ function doPost(e) {
 function route_(req) {
   var a = req.action;
   // Open to everyone with the link
-  if (a === 'districts') return rows_('Districts');
+  if (a === 'districts') return { districts: rows_('Districts'), zones: rows_('Zones') };
   if (a === 'addReceipts') return addReceipts_(req);
   if (a === 'login') return login_(req.key);
   // Everything below needs an admin session
   requireAdmin_(req.token);
   switch (a) {
-    case 'all':           return { districts: rows_('Districts'), receipts: rows_('Receipts'), expenses: rows_('Expenses') };
+    case 'all':           return { districts: rows_('Districts'), zones: rows_('Zones'), receipts: rows_('Receipts'), expenses: rows_('Expenses') };
     case 'updateReceipt': return updateReceipt_(req.receipt);
     case 'deleteReceipt': remove_('Receipts', req.id); return true;
     case 'addDistrict':   return addDistrict_(req.name);
     case 'renameDistrict': return renameDistrict_(req.id, req.name);
     case 'deleteDistrict': return deleteDistrict_(req.id);
+    case 'addZone':       return addZone_(req.district, req.name);
+    case 'renameZone':    return renameZone_(req.id, req.name);
+    case 'deleteZone':    return deleteZone_(req.id);
     case 'addExpense':    return saveExpense_(req.expense, true);
     case 'updateExpense': return saveExpense_(req.expense, false);
     case 'deleteExpense': remove_('Expenses', req.id); return true;
@@ -127,8 +133,14 @@ function districtName_(name) {
   if (!d) throw new Error('Unknown district');
   return d.name;
 }
+function zoneName_(district, zone) {
+  var z = rows_('Zones').filter(function (x) { return x.district === district && x.name === zone; })[0];
+  if (!z) throw new Error('Select a valid zone for ' + district);
+  return z.name;
+}
 function addReceipts_(req) {
   var district = districtName_(req.district);
+  var zone = zoneName_(district, req.zone);
   var list = req.receipts;
   if (!list || !list.length) throw new Error('No receipts to save');
   if (list.length > 500) throw new Error('Too many receipts in one go');
@@ -144,7 +156,7 @@ function addReceipts_(req) {
   var now = new Date().toISOString();
   var by = String(req.submittedBy || '').slice(0, 80);
   clean.forEach(function (c) {
-    c.id = uid_(); c.district = district; c.submittedBy = by; c.createdAt = now; c.updatedAt = now;
+    c.id = uid_(); c.district = district; c.zone = zone; c.submittedBy = by; c.createdAt = now; c.updatedAt = now;
     append_('Receipts', c);
   });
   return { saved: clean.length };
@@ -154,10 +166,11 @@ function updateReceipt_(r) {
   var old = all.filter(function (x) { return x.id === r.id; })[0];
   if (!old) throw new Error('Receipt not found');
   var district = districtName_(r.district);
+  var zone = zoneName_(district, r.zone);
   var c = cleanReceipt_(r);
   if (all.some(function (x) { return x.id !== r.id && x.district === district && String(x.receiptNo) === c.receiptNo; }))
     throw new Error('Receipt ' + c.receiptNo + ' already exists for ' + district);
-  c.district = district; c.updatedAt = new Date().toISOString();
+  c.district = district; c.zone = zone; c.updatedAt = new Date().toISOString();
   update_('Receipts', r.id, c);
   return true;
 }
@@ -180,13 +193,43 @@ function renameDistrict_(id, name) {
   if (all.some(function (x) { return x.id !== id && x.name.toLowerCase() === name.toLowerCase(); })) throw new Error('District already exists');
   update_('Districts', id, { name: name });
   rows_('Receipts').forEach(function (r) { if (r.district === d.name) update_('Receipts', r.id, { district: name }); });
+  rows_('Zones').forEach(function (z) { if (z.district === d.name) update_('Zones', z.id, { district: name }); });
   return true;
 }
 function deleteDistrict_(id) {
   var d = rows_('Districts').filter(function (x) { return x.id === id; })[0];
   if (!d) throw new Error('District not found');
   if (rows_('Receipts').some(function (r) { return r.district === d.name; })) throw new Error('This district has receipts. Delete or move them first.');
+  rows_('Zones').filter(function (z) { return z.district === d.name; }).forEach(function (z) { remove_('Zones', z.id); });
   remove_('Districts', id);
+  return true;
+}
+
+/* ---------- zones ---------- */
+function addZone_(district, name) {
+  district = districtName_(district);
+  name = String(name || '').trim();
+  if (!name) throw new Error('Zone name is required');
+  if (rows_('Zones').some(function (z) { return z.district === district && z.name.toLowerCase() === name.toLowerCase(); })) throw new Error('Zone already exists in ' + district);
+  append_('Zones', { id: uid_(), district: district, name: name });
+  return true;
+}
+function renameZone_(id, name) {
+  name = String(name || '').trim();
+  var all = rows_('Zones');
+  var z = all.filter(function (x) { return x.id === id; })[0];
+  if (!z) throw new Error('Zone not found');
+  if (!name) throw new Error('Zone name is required');
+  if (all.some(function (x) { return x.id !== id && x.district === z.district && x.name.toLowerCase() === name.toLowerCase(); })) throw new Error('Zone already exists in ' + z.district);
+  update_('Zones', id, { name: name });
+  rows_('Receipts').forEach(function (r) { if (r.district === z.district && r.zone === z.name) update_('Receipts', r.id, { zone: name }); });
+  return true;
+}
+function deleteZone_(id) {
+  var z = rows_('Zones').filter(function (x) { return x.id === id; })[0];
+  if (!z) throw new Error('Zone not found');
+  if (rows_('Receipts').some(function (r) { return r.district === z.district && r.zone === z.name; })) throw new Error('This zone has receipts. Delete or move them first.');
+  remove_('Zones', id);
   return true;
 }
 

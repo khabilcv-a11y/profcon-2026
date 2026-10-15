@@ -61,3 +61,5 @@ dialog::backdrop { background: rgba(10,15,30,.55); }
 .foot { border-top: 1px solid var(--line); background: #fff; color: var(--muted); font-size: 13px; padding: 14px 0; text-align: center; }
 .foot img { vertical-align: middle; margin-right: 6px; }
 @media (max-width: 560px) { .brand span { display: none; } }
+details.dist summary { cursor: pointer; list-style-position: inside; }
+details.dist[open] summary { margin-bottom: 4px; }

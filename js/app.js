@@ -1,7 +1,7 @@
 (function () {
   var $ = function (s, r) { return (r || document).querySelector(s); };
   var main = $('#main'), dlg = $('#dlg');
-  var S = { districts: [], receipts: [], expenses: [], tab: 'summary', view: 'entry', draft: [], dist: '', by: '', rfilter: '', rsearch: '', rpt: { dist: '', detail: true } };
+  var S = { districts: [], zones: [], zone: '', receipts: [], expenses: [], tab: 'summary', view: 'entry', draft: [], dist: '', by: '', rfilter: '', rsearch: '', rpt: { dist: '', detail: true } };
 
   /* ---------- helpers ---------- */
   function esc(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
@@ -44,7 +44,7 @@
     refresh().then(adminView);
   }
   function refresh() {
-    return api.call('all').then(function (d) { S.districts = d.districts; S.receipts = d.receipts; S.expenses = d.expenses; })
+    return api.call('all').then(function (d) { S.districts = d.districts; S.zones = d.zones; S.receipts = d.receipts; S.expenses = d.expenses; })
       .catch(function (e) { toast(e.message, true); if (!loggedIn()) { nav(); loginView(); } throw e; });
   }
   function demoBanner() { return api.live ? '' : '<div class="banner">Demo mode: data is saved only in this browser. Set <b>API_URL</b> in <code>js/config.js</code> to use the Google Sheet.</div>'; }
@@ -54,26 +54,35 @@
     main.innerHTML = demoBanner() + '<h2>Enter receipts</h2><p class="sub">Choose your district, say how many receipts you are holding, then fill one row per receipt.</p>' +
       '<div class="card"><div class="grid">' +
       '<div><label for="dist">District</label><select id="dist"><option value="">Loading…</option></select></div>' +
+      '<div><label for="zone">Zone</label><select id="zone"><option value="">Select district first</option></select></div>' +
       '<div><label for="cnt">Number of receipts in hand</label><input id="cnt" type="number" min="1" max="200" inputmode="numeric" placeholder="e.g. 5"></div>' +
       '<div><label for="by">Your name (optional)</label><input id="by" maxlength="80"></div>' +
       '<div><button class="primary" id="gen">Add receipt rows</button></div></div></div><div id="rows"></div>';
-    api.call('districts').then(function (list) {
-      S.districts = list;
-      $('#dist').innerHTML = '<option value="">Select district…</option>' + list.map(function (d) { return '<option>' + esc(d.name) + '</option>'; }).join('');
-      $('#dist').value = S.dist;
+    api.call('districts').then(function (d) {
+      S.districts = d.districts; S.zones = d.zones;
+      $('#dist').innerHTML = '<option value="">Select district…</option>' + d.districts.map(function (x) { return '<option>' + esc(x.name) + '</option>'; }).join('');
+      $('#dist').value = S.dist; fillZones();
     }).catch(function (e) { toast(e.message, true); });
     $('#by').value = S.by;
-    $('#dist').onchange = function () { S.dist = this.value; };
+    $('#dist').onchange = function () { S.dist = this.value; S.zone = ''; fillZones(); };
+    $('#zone').onchange = function () { S.zone = this.value; };
     $('#by').oninput = function () { S.by = this.value; };
     $('#gen').onclick = function () {
       var n = Math.floor(num($('#cnt').value));
       if (!$('#dist').value) return toast('Select a district first', true);
+      if (!$('#zone').value) return toast('Select a zone', true);
       if (n < 1 || n > 200) return toast('Enter a number of receipts between 1 and 200', true);
       while (S.draft.length < n) S.draft.push({ receiptNo: '', amount: '', cash: '', gpay: '', account: '' });
       S.draft.length = n;
       draftTable();
     };
     if (S.draft.length) { $('#cnt').value = S.draft.length; draftTable(); }
+  }
+  function zonesOf(dist) { return S.zones.filter(function (z) { return z.district === dist; }); }
+  function zoneOptions(dist, sel) { return zonesOf(dist).map(function (z) { return '<option' + (z.name === sel ? ' selected' : '') + '>' + esc(z.name) + '</option>'; }).join(''); }
+  function fillZones() {
+    var d = $('#dist').value;
+    $('#zone').innerHTML = d ? '<option value="">Select zone…</option>' + zoneOptions(d, S.zone) : '<option value="">Select district first</option>';
   }
   function draftTable() {
     $('#rows').innerHTML = '<div class="tablewrap"><table><thead><tr><th>#</th><th>Receipt no.</th><th class="n">Total amount</th><th class="n">Cash</th><th class="n">GPay</th><th class="n">Account</th><th>Check</th></tr></thead><tbody>' +
@@ -107,14 +116,15 @@
   }
   function submitDraft() {
     if (!$('#dist').value) return toast('Select a district first', true);
+    if (!$('#zone').value) return toast('Select a zone', true);
     if (!draftCheck()) return toast('Fix the rows marked in red first', true);
     var nos = S.draft.map(function (r) { return r.receiptNo.trim(); });
     if (nos.some(function (n, i) { return nos.indexOf(n) !== i; })) return toast('A receipt number is repeated in this list', true);
     var t = sum(S.draft.map(function (r) { return { amount: num(r.amount), cash: num(r.cash), gpay: num(r.gpay), account: num(r.account) }; }));
-    if (!confirm('Submit ' + S.draft.length + ' receipts for ' + $('#dist').value + '?\nTotal ₹' + inr(t.amount) + ' (Cash ₹' + inr(t.cash) + ', GPay ₹' + inr(t.gpay) + ', Account ₹' + inr(t.account) + ')')) return;
-    busy($('#sub'), api.call('addReceipts', { district: $('#dist').value, submittedBy: S.by, receipts: S.draft })).then(function (r) {
-      var dn = $('#dist').value; S.draft = [];
-      main.innerHTML = '<div class="card"><h2 class="ok">✓ ' + r.saved + ' receipts saved</h2><p>District: <b>' + esc(dn) + '</b> · Total ₹' + inr(t.amount) + '</p><p class="note">Any correction must be made by the admin.</p><button class="primary" id="again">Enter more receipts</button></div>';
+    if (!confirm('Submit ' + S.draft.length + ' receipts for ' + $('#zone').value + ', ' + $('#dist').value + '?\nTotal ₹' + inr(t.amount) + ' (Cash ₹' + inr(t.cash) + ', GPay ₹' + inr(t.gpay) + ', Account ₹' + inr(t.account) + ')')) return;
+    busy($('#sub'), api.call('addReceipts', { district: $('#dist').value, zone: $('#zone').value, submittedBy: S.by, receipts: S.draft })).then(function (r) {
+      var dn = $('#zone').value + ', ' + $('#dist').value; S.draft = [];
+      main.innerHTML = '<div class="card"><h2 class="ok">✓ ' + r.saved + ' receipts saved</h2><p>Zone: <b>' + esc(dn) + '</b> · Total ₹' + inr(t.amount) + '</p><p class="note">Any correction must be made by the admin.</p><button class="primary" id="again">Enter more receipts</button></div>';
       $('#again').onclick = entryView;
     });
   }
@@ -158,10 +168,10 @@
     var list = S.receipts.filter(function (r) { return (!S.rfilter || r.district === S.rfilter) && (!S.rsearch || String(r.receiptNo).toLowerCase().indexOf(S.rsearch.toLowerCase()) >= 0); });
     p.innerHTML = '<h2>Receipts</h2><div class="card"><div class="grid"><div><label>District</label><select id="rf"><option value="">All districts</option>' + S.districts.map(function (d) { return '<option' + (d.name === S.rfilter ? ' selected' : '') + '>' + esc(d.name) + '</option>'; }).join('') + '</select></div>' +
       '<div><label>Search receipt no.</label><input id="rs" value="' + esc(S.rsearch) + '"></div></div></div>' +
-      '<div class="tablewrap"><table><thead><tr><th>District</th><th>Receipt no.</th><th class="n">Total</th><th class="n">Cash</th><th class="n">GPay</th><th class="n">Account</th><th>By</th><th></th></tr></thead><tbody>' +
+      '<div class="tablewrap"><table><thead><tr><th>District</th><th>Zone</th><th>Receipt no.</th><th class="n">Total</th><th class="n">Cash</th><th class="n">GPay</th><th class="n">Account</th><th>By</th><th></th></tr></thead><tbody>' +
       (list.length ? list.map(function (r) {
-        return '<tr><td>' + esc(r.district) + '</td><td>' + esc(r.receiptNo) + '</td><td class="n">' + inr(r.amount) + '</td><td class="n">' + inr(r.cash) + '</td><td class="n">' + inr(r.gpay) + '</td><td class="n">' + inr(r.account) + '</td><td>' + esc(r.submittedBy) + '</td><td><button class="sm" data-e="' + esc(r.id) + '">Edit</button> <button class="sm danger" data-d="' + esc(r.id) + '">Delete</button></td></tr>';
-      }).join('') : '<tr><td colspan="8" class="empty">No receipts yet.</td></tr>') + '</tbody>' + (list.length ? '<tfoot><tr><td colspan="2">' + list.length + ' receipts</td><td class="n">' + inr(sum(list).amount) + '</td><td class="n">' + inr(sum(list).cash) + '</td><td class="n">' + inr(sum(list).gpay) + '</td><td class="n">' + inr(sum(list).account) + '</td><td colspan="2"></td></tr></tfoot>' : '') + '</table></div>';
+        return '<tr><td>' + esc(r.district) + '</td><td>' + esc(r.zone) + '</td><td>' + esc(r.receiptNo) + '</td><td class="n">' + inr(r.amount) + '</td><td class="n">' + inr(r.cash) + '</td><td class="n">' + inr(r.gpay) + '</td><td class="n">' + inr(r.account) + '</td><td>' + esc(r.submittedBy) + '</td><td><button class="sm" data-e="' + esc(r.id) + '">Edit</button> <button class="sm danger" data-d="' + esc(r.id) + '">Delete</button></td></tr>';
+      }).join('') : '<tr><td colspan="9" class="empty">No receipts yet.</td></tr>') + '</tbody>' + (list.length ? '<tfoot><tr><td colspan="3">' + list.length + ' receipts</td><td class="n">' + inr(sum(list).amount) + '</td><td class="n">' + inr(sum(list).cash) + '</td><td class="n">' + inr(sum(list).gpay) + '</td><td class="n">' + inr(sum(list).account) + '</td><td colspan="2"></td></tr></tfoot>' : '') + '</table></div>';
     $('#rf').onchange = function () { S.rfilter = this.value; receiptsTab(p); };
     $('#rs').oninput = function () { S.rsearch = this.value; var pos = this.selectionStart; receiptsTab(p); var el = $('#rs'); el.focus(); el.setSelectionRange(pos, pos); };
     p.onclick = function (e) {
@@ -173,34 +183,51 @@
   function editReceipt(r) {
     dlg.innerHTML = '<form method="dialog" id="ef"><h2>Edit receipt</h2><div class="grid" style="margin:12px 0">' +
       '<div><label>District</label><select id="e-district">' + S.districts.map(function (d) { return '<option' + (d.name === r.district ? ' selected' : '') + '>' + esc(d.name) + '</option>'; }).join('') + '</select></div>' +
+      '<div><label>Zone</label><select id="e-zone">' + zoneOptions(r.district, r.zone) + '</select></div>' +
       '<div><label>Receipt no.</label><input id="e-receiptNo" value="' + esc(r.receiptNo) + '"></div>' +
       ['amount', 'cash', 'gpay', 'account'].map(function (f) { return '<div><label>' + { amount: 'Total amount', cash: 'Cash', gpay: 'GPay', account: 'Account' }[f] + '</label><input type="number" min="0" step="0.01" id="e-' + f + '" value="' + r[f] + '"></div>'; }).join('') +
       '</div><p class="note" id="e-chk"></p><div class="row end"><button type="button" id="e-x">Cancel</button><button class="primary" id="e-s">Save</button></div></form>';
     dlg.showModal();
     function chk() { var d = num($('#e-amount').value) - num($('#e-cash').value) - num($('#e-gpay').value) - num($('#e-account').value); $('#e-chk').innerHTML = Math.abs(d) < 0.01 ? '<span class="ok">✓ Cash + GPay + Account match the total</span>' : '<span class="bad">Difference: ₹' + inr(d) + '</span>'; }
     dlg.oninput = chk; chk();
+    $('#e-district').onchange = function () { $('#e-zone').innerHTML = zoneOptions(this.value, ''); };
     $('#e-x').onclick = function () { dlg.close(); };
     $('#ef').onsubmit = function (e) {
       e.preventDefault();
-      var rec = { id: r.id, district: $('#e-district').value, receiptNo: $('#e-receiptNo').value.trim() };
+      var rec = { id: r.id, district: $('#e-district').value, zone: $('#e-zone').value, receiptNo: $('#e-receiptNo').value.trim() };
       ['amount', 'cash', 'gpay', 'account'].forEach(function (f) { rec[f] = num($('#e-' + f).value); });
       busy($('#e-s'), api.call('updateReceipt', { receipt: rec })).then(function () { dlg.close(); toast('Saved'); reload(); });
     };
   }
 
   function districtsTab(p) {
-    p.innerHTML = '<h2>Districts</h2><div class="card"><form id="df" class="row"><input id="dn" placeholder="New district name" style="flex:1;min-width:200px"><button class="primary">Add district</button></form></div>' +
-      '<div class="tablewrap"><table><thead><tr><th>District</th><th class="n">Receipts</th><th></th></tr></thead><tbody>' +
+    p.innerHTML = '<h2>Districts &amp; zones</h2><div class="card"><form id="df" class="row"><input id="dn" placeholder="New district name" style="flex:1;min-width:200px"><button class="primary">Add district</button></form></div>' +
       S.districts.map(function (d) {
-        var n = S.receipts.filter(function (r) { return r.district === d.name; }).length;
-        return '<tr><td>' + esc(d.name) + '</td><td class="n">' + n + '</td><td><button class="sm" data-r="' + esc(d.id) + '">Rename</button> <button class="sm danger" data-d="' + esc(d.id) + '"' + (n ? ' disabled title="Has receipts"' : '') + '>Delete</button></td></tr>';
-      }).join('') + '</tbody></table></div>';
+        var zs = zonesOf(d.name), n = S.receipts.filter(function (r) { return r.district === d.name; }).length;
+        return '<details class="card dist" data-n="' + esc(d.name) + '"' + (S.openD === d.name ? ' open' : '') + '><summary><b>' + esc(d.name) + '</b> <span class="note">' + zs.length + ' zones · ' + n + ' receipts</span></summary>' +
+          '<div class="row" style="margin:10px 0"><button class="sm" data-r="' + esc(d.id) + '">Rename district</button><button class="sm danger" data-d="' + esc(d.id) + '"' + (n ? ' disabled title="Has receipts"' : '') + '>Delete district</button></div>' +
+          '<div class="tablewrap"><table><tbody>' + (zs.length ? zs.map(function (z) {
+            var zn = S.receipts.filter(function (r) { return r.district === d.name && r.zone === z.name; }).length;
+            return '<tr><td>' + esc(z.name) + '</td><td class="n note">' + zn + ' receipts</td><td class="n"><button class="sm" data-zr="' + esc(z.id) + '">Rename</button> <button class="sm danger" data-zd="' + esc(z.id) + '"' + (zn ? ' disabled title="Has receipts"' : '') + '>Delete</button></td></tr>';
+          }).join('') : '<tr><td class="empty">No zones yet.</td></tr>') + '</tbody></table></div>' +
+          '<form class="row zf" data-dist="' + esc(d.name) + '" style="margin-top:10px"><input placeholder="New zone in ' + esc(d.name) + '" style="flex:1;min-width:200px"><button class="sm primary">Add zone</button></form></details>';
+      }).join('');
     $('#df').onsubmit = function (e) { e.preventDefault(); busy($('#df button'), api.call('addDistrict', { name: $('#dn').value })).then(function () { toast('District added'); reload(); }); };
+    [].forEach.call(p.querySelectorAll('.zf'), function (f) {
+      f.onsubmit = function (e) {
+        e.preventDefault(); S.openD = f.dataset.dist;
+        busy(f.querySelector('button'), api.call('addZone', { district: f.dataset.dist, name: f.querySelector('input').value })).then(function () { toast('Zone added'); reload(); });
+      };
+    });
     p.onclick = function (e) {
-      var b = e.target.closest('button'); if (!b) return;
+      var b = e.target.closest('button'); if (!b || b.form) return;
+      var host = b.closest('details'); if (host) S.openD = host.dataset.n;
       var d = S.districts.filter(function (x) { return x.id === (b.dataset.r || b.dataset.d); })[0];
-      if (b.dataset.r) { var nn = prompt('Rename district', d.name); if (nn && nn.trim() !== d.name) busy(b, api.call('renameDistrict', { id: d.id, name: nn })).then(function () { toast('Renamed'); reload(); }); }
-      if (b.dataset.d && confirm('Delete district "' + d.name + '"?')) busy(b, api.call('deleteDistrict', { id: d.id })).then(function () { toast('Deleted'); reload(); });
+      var z = S.zones.filter(function (x) { return x.id === (b.dataset.zr || b.dataset.zd); })[0];
+      if (b.dataset.r) { var nn = prompt('Rename district', d.name); if (nn && nn.trim() !== d.name) { S.openD = nn.trim(); busy(b, api.call('renameDistrict', { id: d.id, name: nn })).then(function () { toast('Renamed'); reload(); }); } }
+      if (b.dataset.d && confirm('Delete district "' + d.name + '" and its zones?')) busy(b, api.call('deleteDistrict', { id: d.id })).then(function () { toast('Deleted'); reload(); });
+      if (b.dataset.zr) { var zn = prompt('Rename zone', z.name); if (zn && zn.trim() !== z.name) busy(b, api.call('renameZone', { id: z.id, name: zn })).then(function () { toast('Renamed'); reload(); }); }
+      if (b.dataset.zd && confirm('Delete zone "' + z.name + '"?')) busy(b, api.call('deleteZone', { id: z.id })).then(function () { toast('Deleted'); reload(); });
     };
   }
 
@@ -326,10 +353,10 @@
         title(d.name + ' - receipts', y);
         doc.autoTable({
           startY: y + 8, margin: { left: M, right: M }, theme: 'grid', headStyles: head, footStyles: foot, styles: { fontSize: 9, cellPadding: 3.5 }, alternateRowStyles: { fillColor: [248, 249, 253] },
-          head: [['#', 'Receipt no.', 'Total', 'Cash', 'GPay', 'Account']],
-          body: list.map(function (r, i) { return [i + 1, r.receiptNo, inr(r.amount), inr(r.cash), inr(r.gpay), inr(r.account)]; }),
-          foot: [['', 'Total (' + d.count + ')', inr(d.amount), inr(d.cash), inr(d.gpay), inr(d.account)]], showFoot: 'lastPage',
-          columnStyles: { 0: { cellWidth: 28 }, 2: right, 3: right, 4: right, 5: right }
+          head: [['#', 'Zone', 'Receipt no.', 'Total', 'Cash', 'GPay', 'Account']],
+          body: list.map(function (r, i) { return [i + 1, r.zone || '', r.receiptNo, inr(r.amount), inr(r.cash), inr(r.gpay), inr(r.account)]; }),
+          foot: [['', '', 'Total (' + d.count + ')', inr(d.amount), inr(d.cash), inr(d.gpay), inr(d.account)]], showFoot: 'lastPage',
+          columnStyles: { 0: { cellWidth: 28 }, 3: right, 4: right, 5: right, 6: right }
         });
       });
     }

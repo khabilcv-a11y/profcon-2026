@@ -30,13 +30,17 @@
   window.api = api;
 
   /* ---------------- demo store ---------------- */
-  var KEY = 'profcon_demo';
-  var SEED = ['Thiruvananthapuram', 'Kollam', 'Pathanamthitta', 'Alappuzha', 'Kottayam', 'Idukki', 'Ernakulam',
-    'Thrissur', 'Palakkad', 'Malappuram', 'Kozhikode', 'Wayanad', 'Kannur', 'Kasaragod'];
+  var KEY = 'profcon_demo2';
+  var SEED = window.PROFCON_SEED || {};
   function uid() { return Math.random().toString(36).slice(2, 12); }
   function load() {
     try { var s = JSON.parse(localStorage.getItem(KEY)); if (s) return s; } catch (e) {}
-    return { key: '1234', districts: SEED.map(function (n) { return { id: uid(), name: n }; }), receipts: [], expenses: [] };
+    var st = { key: '1234', districts: [], zones: [], receipts: [], expenses: [] };
+    Object.keys(SEED).forEach(function (d) {
+      st.districts.push({ id: uid(), name: d });
+      SEED[d].forEach(function (z) { st.zones.push({ id: uid(), district: d, name: z }); });
+    });
+    return st;
   }
   function save(s) { localStorage.setItem(KEY, JSON.stringify(s)); }
   function num(v) { var n = Number(v); return isFinite(n) ? Math.round(n * 100) / 100 : 0; }
@@ -54,7 +58,7 @@
   }
   function run(a, d) {
     var s = load(), now = new Date().toISOString(), i;
-    if (a === 'districts') return s.districts;
+    if (a === 'districts') return { districts: s.districts, zones: s.zones };
     if (a === 'login') {
       if (String(d.key) !== s.key) throw new Error('Wrong admin key');
       api.setToken('demo'); return { token: 'demo' };
@@ -62,6 +66,7 @@
     if (a === 'addReceipts') {
       var dist = s.districts.filter(function (x) { return x.name === d.district; })[0];
       if (!dist) throw new Error('Unknown district');
+      if (!s.zones.some(function (z) { return z.district === dist.name && z.name === d.zone; })) throw new Error('Select a valid zone for ' + dist.name);
       var seen = {};
       var list = d.receipts.map(function (r) {
         var c = clean(r);
@@ -69,7 +74,7 @@
         if (s.receipts.some(function (x) { return x.district === dist.name && String(x.receiptNo) === c.receiptNo; })) throw new Error('Receipt ' + c.receiptNo + ' is already recorded for ' + dist.name);
         seen[c.receiptNo] = 1; return c;
       });
-      list.forEach(function (c) { c.id = uid(); c.district = dist.name; c.submittedBy = d.submittedBy || ''; c.createdAt = now; c.updatedAt = now; s.receipts.push(c); });
+      list.forEach(function (c) { c.id = uid(); c.district = dist.name; c.zone = d.zone; c.submittedBy = d.submittedBy || ''; c.createdAt = now; c.updatedAt = now; s.receipts.push(c); });
       save(s); return { saved: list.length };
     }
     if (api.token !== 'demo') throw new Error('Session expired. Please log in again.');
@@ -79,7 +84,8 @@
         var c = clean(d.receipt); i = s.receipts.findIndex(function (x) { return x.id === d.receipt.id; });
         if (i < 0) throw new Error('Receipt not found');
         if (s.receipts.some(function (x) { return x.id !== d.receipt.id && x.district === d.receipt.district && String(x.receiptNo) === c.receiptNo; })) throw new Error('Receipt ' + c.receiptNo + ' already exists for ' + d.receipt.district);
-        Object.assign(s.receipts[i], c, { district: d.receipt.district, updatedAt: now }); save(s); return true;
+        if (!s.zones.some(function (z) { return z.district === d.receipt.district && z.name === d.receipt.zone; })) throw new Error('Select a valid zone for ' + d.receipt.district);
+        Object.assign(s.receipts[i], c, { district: d.receipt.district, zone: d.receipt.zone, updatedAt: now }); save(s); return true;
       case 'deleteReceipt': s.receipts = s.receipts.filter(function (x) { return x.id !== d.id; }); save(s); return true;
       case 'addDistrict':
         var n = String(d.name || '').trim();
@@ -91,11 +97,28 @@
         if (!dd || !nn) throw new Error('District name is required');
         if (s.districts.some(function (x) { return x.id !== d.id && x.name.toLowerCase() === nn.toLowerCase(); })) throw new Error('District already exists');
         s.receipts.forEach(function (r) { if (r.district === dd.name) r.district = nn; });
+        s.zones.forEach(function (z) { if (z.district === dd.name) z.district = nn; });
         dd.name = nn; save(s); return true;
       case 'deleteDistrict':
         var del = s.districts.filter(function (x) { return x.id === d.id; })[0];
         if (s.receipts.some(function (r) { return del && r.district === del.name; })) throw new Error('This district has receipts. Delete or move them first.');
+        s.zones = s.zones.filter(function (z) { return !del || z.district !== del.name; });
         s.districts = s.districts.filter(function (x) { return x.id !== d.id; }); save(s); return true;
+      case 'addZone':
+        var zn = String(d.name || '').trim();
+        if (!zn) throw new Error('Zone name is required');
+        if (s.zones.some(function (z) { return z.district === d.district && z.name.toLowerCase() === zn.toLowerCase(); })) throw new Error('Zone already exists in ' + d.district);
+        s.zones.push({ id: uid(), district: d.district, name: zn }); save(s); return true;
+      case 'renameZone':
+        var zz = s.zones.filter(function (z) { return z.id === d.id; })[0], zr = String(d.name || '').trim();
+        if (!zz || !zr) throw new Error('Zone name is required');
+        if (s.zones.some(function (z) { return z.id !== d.id && z.district === zz.district && z.name.toLowerCase() === zr.toLowerCase(); })) throw new Error('Zone already exists in ' + zz.district);
+        s.receipts.forEach(function (r) { if (r.district === zz.district && r.zone === zz.name) r.zone = zr; });
+        zz.name = zr; save(s); return true;
+      case 'deleteZone':
+        var dz = s.zones.filter(function (z) { return z.id === d.id; })[0];
+        if (s.receipts.some(function (r) { return dz && r.district === dz.district && r.zone === dz.name; })) throw new Error('This zone has receipts. Delete or move them first.');
+        s.zones = s.zones.filter(function (z) { return z.id !== d.id; }); save(s); return true;
       case 'addExpense':
       case 'updateExpense':
         var x = d.expense;
