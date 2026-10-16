@@ -71,14 +71,41 @@
     if (v === 'entry') return entryView();
     if (v === 'xentry') return xentryView();
     if (!loggedIn()) return loginView();
+    main.innerHTML = '<p class="note" style="padding:30px 0;text-align:center">Loading…</p>';
     refresh().then(adminView);
   }
   function refresh() {
     return api.call('all').then(function (d) { S.districts = d.districts; S.zones = d.zones; S.receipts = d.receipts; S.expenses = d.expenses; })
       .catch(function (e) { toast(e.message, true); if (!loggedIn()) { nav(); loginView(); } throw e; });
   }
+  /* District/zone lists: show instantly from memory, last visit's cache or the built-in list, then refresh quietly. */
+  var LKEY = 'profcon_lists_v1', lastFetch = 0, inflight = null;
+  function sig() { return S.districts.map(function (d) { return d.name; }).join('|') + '#' + S.zones.map(function (z) { return z.district + '/' + z.name; }).join('|'); }
+  function setLists(d) {
+    S.districts = d.districts; S.zones = d.zones;
+    if (S.dist && !S.districts.some(function (x) { return x.name === S.dist; })) S.dist = '';
+    if (S.xdist && !S.districts.some(function (x) { return x.name === S.xdist; })) S.xdist = '';
+    lsSet(LKEY, JSON.stringify(d));
+  }
+  function seedLists() {
+    var seed = window.PROFCON_SEED || {}, ds = [], zs = [];
+    Object.keys(seed).forEach(function (d) { ds.push({ id: d, name: d }); seed[d].forEach(function (z) { zs.push({ id: d + '/' + z, district: d, name: z }); }); });
+    return { districts: ds, zones: zs };
+  }
+  function fetchLists() {
+    if (!inflight) inflight = api.call('districts').then(function (d) { setLists(d); lastFetch = Date.now(); inflight = null; }, function (e) { inflight = null; throw e; });
+    return inflight;
+  }
   function loadLists(done) {
-    api.call('districts').then(function (d) { S.districts = d.districts; S.zones = d.zones; done(); }).catch(function (e) { toast(e.message, true); });
+    var v = S.view, fresh = S.districts.length && Date.now() - lastFetch < 60000;
+    if (!S.districts.length) {
+      var c = null; try { c = JSON.parse(lsGet(LKEY)); } catch (e) {}
+      var d0 = c && c.districts && c.zones ? c : seedLists(); S.districts = d0.districts; S.zones = d0.zones;
+    }
+    done();
+    if (fresh) return;
+    var before = sig();
+    fetchLists().then(function () { if (S.view === v && sig() !== before) done(); }).catch(function (e) { toast(e.message, true); });
   }
   function demoBanner() { return api.live ? '' : '<div class="banner">Demo mode: data is saved only in this browser. Set <b>API_URL</b> in <code>js/config.js</code> to use the Google Sheet.</div>'; }
 
@@ -558,6 +585,7 @@
     return pdfFinish(doc);
   }
 
+  if (api.live) fetchLists().catch(function () {});   // start loading the lists before the page is even drawn
   go('entry');
   if (!lsGet('profcon_tour_done')) tour(0);
 })();

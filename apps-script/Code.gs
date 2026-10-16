@@ -48,15 +48,16 @@ function setup() {
 function doGet() { return json_({ ok: true, service: 'PROFCON Receipts API' }); }
 
 function doPost(e) {
-  var lock = LockService.getScriptLock();
+  var lock = LockService.getScriptLock(), locked = false;
   try {
-    lock.waitLock(20000);
     var req = JSON.parse(e.postData.contents);
+    // Reads never wait behind a write; only writes take the lock.
+    if (['districts', 'all', 'login', 'logout'].indexOf(req.action) < 0) { lock.waitLock(20000); locked = true; }
     return json_({ ok: true, data: route_(req) });
   } catch (err) {
     return json_({ ok: false, error: String(err.message || err) });
   } finally {
-    try { lock.releaseLock(); } catch (x) {}
+    if (locked) { try { lock.releaseLock(); } catch (x) {} }
   }
 }
 
@@ -64,12 +65,13 @@ function doPost(e) {
 function route_(req) {
   var a = req.action;
   // Open to everyone with the link
-  if (a === 'districts') return { districts: rows_('Districts'), zones: rows_('Zones') };
+  if (a === 'districts') return lists_();
   if (a === 'addReceipts') return addReceipts_(req);
   if (a === 'addExpenses') return addExpenses_(req);
   if (a === 'login') return login_(req.key);
   // Everything below needs an admin session
   requireAdmin_(req.token);
+  if (LIST_CHANGERS.indexOf(a) >= 0) CacheService.getScriptCache().remove('lists');
   switch (a) {
     case 'all':           return { districts: rows_('Districts'), zones: rows_('Zones'), receipts: rows_('Receipts'), expenses: rows_('Expenses') };
     case 'updateReceipt': return updateReceipt_(req.receipt);
@@ -88,6 +90,16 @@ function route_(req) {
     case 'emailReport':   return emailReport_(req);
   }
   throw new Error('Unknown action');
+}
+
+/* District + zone lists are read on every page load, so keep them in the script cache. */
+var LIST_CHANGERS = ['addDistrict', 'renameDistrict', 'deleteDistrict', 'addZone', 'renameZone', 'deleteZone'];
+function lists_() {
+  var cache = CacheService.getScriptCache(), hit = cache.get('lists');
+  if (hit) return JSON.parse(hit);
+  var out = { districts: rows_('Districts'), zones: rows_('Zones') };
+  try { cache.put('lists', JSON.stringify(out), 1800); } catch (e) {}
+  return out;
 }
 
 /* ---------- auth ---------- */
