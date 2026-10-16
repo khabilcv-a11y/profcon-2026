@@ -2,15 +2,11 @@
    store in this browser's localStorage so the app can be tried without a sheet. */
 (function () {
   var URL_ = (window.PROFCON_CONFIG || {}).API_URL;
-  var TOKEN_KEY = 'profcon_token';
 
   var api = {
     live: !!URL_,
-    token: sessionStorage.getItem(TOKEN_KEY) || '',
-    setToken: function (t) {
-      api.token = t || '';
-      if (t) sessionStorage.setItem(TOKEN_KEY, t); else sessionStorage.removeItem(TOKEN_KEY);
-    },
+    token: '',   // kept in memory only: a refresh or closing the tab logs the admin out
+    setToken: function (t) { api.token = t || ''; },
     call: function (action, data) {
       data = data || {};
       if (!URL_) return demo(action, data);
@@ -98,6 +94,9 @@
     if (api.token !== 'demo') throw new Error('Session expired. Please log in again.');
     switch (a) {
       case 'all': return s;
+      case 'logout':
+        if (String(d.key) !== s.key) throw new Error('Wrong admin key');
+        api.setToken(''); return true;
       case 'updateReceipt':
         var c = clean(d.receipt); i = s.receipts.findIndex(function (x) { return x.id === d.receipt.id; });
         if (i < 0) throw new Error('Receipt not found');

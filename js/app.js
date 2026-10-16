@@ -314,8 +314,8 @@
 
   /* ---------- admin login ---------- */
   function loginView() {
-    main.innerHTML = demoBanner() + '<div class="card" style="max-width:380px;margin:30px auto"><h2>Admin login</h2><p class="sub">Enter the admin key.</p>' +
-      '<form id="lf"><label for="key">Admin key</label><input id="key" type="password" autocomplete="current-password" autofocus><div class="row end" style="margin-top:12px"><button class="primary">Log in</button></div></form></div>';
+    main.innerHTML = demoBanner() + '<div class="card" style="max-width:380px;margin:30px auto"><h2>Admin login</h2><p class="sub">Enter the admin PIN. You will be asked again every time you log in.</p>' +
+      '<form id="lf"><label for="key">Admin PIN</label><input id="key" type="password" autocomplete="current-password" autofocus><div class="row end" style="margin-top:12px"><button class="primary">Log in</button></div></form></div>';
     $('#lf').onsubmit = function (e) {
       e.preventDefault();
       busy($('#lf button'), api.call('login', { key: $('#key').value })).then(function (r) { api.setToken(r.token); go('admin'); });
@@ -469,7 +469,21 @@
       if ($('#k-new').value !== $('#k-rep').value) return toast('New keys do not match', true);
       busy($('#kf button'), api.call('changeKey', { current: $('#k-cur').value, next: $('#k-new').value })).then(function () { toast('Admin key changed'); $('#kf').reset(); });
     };
-    $('#lo').onclick = function () { api.setToken(''); S.receipts = []; S.expenses = []; go('entry'); };
+    $('#lo').onclick = askLogout;
+  }
+
+  function askLogout() {
+    dlg.oninput = null;
+    dlg.innerHTML = '<form id="lof"><h2>Log out</h2><p class="note">Enter the admin PIN to log out.</p><label for="lo-k">Admin PIN</label>' +
+      '<input id="lo-k" type="password" autocomplete="current-password" required><div class="row end" style="margin-top:14px"><button type="button" id="lo-x">Cancel</button><button class="primary" id="lo-s">Log out</button></div></form>';
+    dlg.showModal(); $('#lo-k').focus();
+    $('#lo-x').onclick = function () { dlg.close(); };
+    $('#lof').onsubmit = function (e) {
+      e.preventDefault();
+      busy($('#lo-s'), api.call('logout', { key: $('#lo-k').value })).then(function () {
+        dlg.close(); api.setToken(''); S.receipts = []; S.expenses = []; toast('Logged out'); go('entry');
+      });
+    };
   }
 
   /* ---------- admin report ---------- */

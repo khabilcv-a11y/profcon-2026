@@ -84,6 +84,7 @@ function route_(req) {
     case 'updateExpense': return saveExpense_(req.expense, false);
     case 'deleteExpense': remove_('Expenses', req.id); return true;
     case 'changeKey':     return changeKey_(req.current, req.next);
+    case 'logout':        return logout_(req);
     case 'emailReport':   return emailReport_(req);
   }
   throw new Error('Unknown action');
@@ -102,6 +103,14 @@ function login_(key) {
   var token = Utilities.getUuid() + Utilities.getUuid();
   cache.put('s_' + token, '1', SESSION_SECONDS);
   return { token: token };
+}
+function logout_(req) {
+  var cache = CacheService.getScriptCache();
+  var fails = Number(cache.get('fails') || 0);
+  if (fails >= MAX_FAILS) throw new Error('Too many wrong attempts. Try again in 15 minutes.');
+  if (!checkKey_(String(req.key || ''))) { cache.put('fails', String(fails + 1), 900); throw new Error('Wrong admin key'); }
+  cache.remove('s_' + req.token);
+  return true;
 }
 function requireAdmin_(token) {
   if (!token || !CacheService.getScriptCache().get('s_' + token)) throw new Error('Session expired. Please log in again.');
