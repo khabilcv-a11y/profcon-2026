@@ -30,7 +30,7 @@
   window.api = api;
 
   /* ---------------- demo store ---------------- */
-  var KEY = 'profcon_demo2';
+  var KEY = 'profcon_demo3';
   var SEED = window.PROFCON_SEED || {};
   function uid() { return Math.random().toString(36).slice(2, 12); }
   function load() {
@@ -51,6 +51,15 @@
     if (Math.abs(o.cash + o.gpay + o.account - o.amount) > 0.009) throw new Error('Receipt ' + o.receiptNo + ': Cash + GPay + Account must equal the total amount');
     return o;
   }
+  var CATS = window.PROFCON_CATEGORIES || [];
+  function cleanExp(x, needDist) {
+    var c = { date: String(x.date || '').slice(0, 10) || new Date().toISOString().slice(0, 10), district: String(x.district || '').trim(), category: String(x.category || '').trim(), item: String(x.item || '').trim(), amount: num(x.amount), note: x.note || '' };
+    if (needDist && !c.district) throw new Error('Select a district');
+    if (!c.item) throw new Error('Expense item is required');
+    if (CATS.indexOf(c.category) < 0) throw new Error('Select a category for "' + c.item + '"');
+    if (!(c.amount > 0)) throw new Error('Amount for "' + c.item + '" must be more than 0');
+    return c;
+  }
   function demo(action, d) {
     return new Promise(function (resolve, reject) {
       try { resolve(run(action, d)); } catch (e) { reject(e); }
@@ -66,16 +75,25 @@
     if (a === 'addReceipts') {
       var dist = s.districts.filter(function (x) { return x.name === d.district; })[0];
       if (!dist) throw new Error('Unknown district');
-      if (d.zone && !s.zones.some(function (z) { return z.district === dist.name && z.name === d.zone; })) throw new Error('Select a valid zone for ' + dist.name);
       var seen = {};
       var list = d.receipts.map(function (r) {
         var c = clean(r);
+        c.zone = String(r.zone || '');
+        if (c.zone && !s.zones.some(function (z) { return z.district === dist.name && z.name === c.zone; })) throw new Error('Select a valid zone for ' + dist.name);
         if (seen[c.receiptNo]) throw new Error('Receipt ' + c.receiptNo + ' is entered twice');
         if (s.receipts.some(function (x) { return x.district === dist.name && String(x.receiptNo) === c.receiptNo; })) throw new Error('Receipt ' + c.receiptNo + ' is already recorded for ' + dist.name);
         seen[c.receiptNo] = 1; return c;
       });
-      list.forEach(function (c) { c.id = uid(); c.district = dist.name; c.zone = d.zone || ''; c.submittedBy = d.submittedBy || ''; c.createdAt = now; c.updatedAt = now; s.receipts.push(c); });
+      list.forEach(function (c) { c.id = uid(); c.district = dist.name; c.submittedBy = d.submittedBy || ''; c.createdAt = now; c.updatedAt = now; s.receipts.push(c); });
       save(s); return { saved: list.length };
+    }
+    if (a === 'addExpenses') {
+      var dn = s.districts.filter(function (x) { return x.name === d.district; })[0];
+      if (!dn) throw new Error('Unknown district');
+      if (!d.expenses || !d.expenses.length) throw new Error('No expense items to save');
+      var cl = d.expenses.map(function (x) { return cleanExp(Object.assign({}, x, { district: dn.name }), true); });
+      cl.forEach(function (c) { s.expenses.push(Object.assign({ id: uid(), createdAt: now, submittedBy: d.submittedBy || '' }, c)); });
+      save(s); return { saved: cl.length };
     }
     if (api.token !== 'demo') throw new Error('Session expired. Please log in again.');
     switch (a) {
@@ -121,13 +139,9 @@
         s.zones = s.zones.filter(function (z) { return z.id !== d.id; }); save(s); return true;
       case 'addExpense':
       case 'updateExpense':
-        var x = d.expense;
-        if (!x.date) throw new Error('Date is required');
-        if (!String(x.item || '').trim()) throw new Error('Expense item is required');
-        if (!(num(x.amount) > 0)) throw new Error('Amount must be more than 0');
-        var e = { date: x.date, item: String(x.item).trim(), amount: num(x.amount), note: x.note || '' };
-        if (a === 'addExpense') s.expenses.push(Object.assign({ id: uid(), createdAt: now }, e));
-        else Object.assign(s.expenses.filter(function (y) { return y.id === x.id; })[0] || {}, e);
+        var xe = cleanExp(d.expense, false);
+        if (a === 'addExpense') s.expenses.push(Object.assign({ id: uid(), createdAt: now, submittedBy: 'admin' }, xe));
+        else Object.assign(s.expenses.filter(function (y) { return y.id === d.expense.id; })[0] || {}, xe);
         save(s); return true;
       case 'deleteExpense': s.expenses = s.expenses.filter(function (y) { return y.id !== d.id; }); save(s); return true;
       case 'changeKey':

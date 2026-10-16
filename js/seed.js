@@ -188,3 +188,6 @@ window.PROFCON_SEED = {
   "Thirunavaya"
  ]
 };
+
+/* Expense categories (keep in sync with CATEGORIES in apps-script/Code.gs) */
+window.PROFCON_CATEGORIES = ['Food', 'Travel allowance', 'Programme expense', 'Transportation cost', 'Accommodation', 'Printing & publicity', 'Other'];

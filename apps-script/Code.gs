@@ -12,9 +12,10 @@ var TABS = {
   Districts: ['id', 'name'],
   Zones:     ['id', 'district', 'name'],
   Receipts:  ['id', 'district', 'zone', 'receiptNo', 'amount', 'cash', 'gpay', 'account', 'submittedBy', 'createdAt', 'updatedAt'],
-  Expenses:  ['id', 'date', 'item', 'amount', 'note', 'createdAt'],
+  Expenses:  ['id', 'date', 'district', 'category', 'item', 'amount', 'note', 'submittedBy', 'createdAt'],
   Settings:  ['key', 'value']
 };
+var CATEGORIES = ['Food', 'Travel allowance', 'Programme expense', 'Transportation cost', 'Accommodation', 'Printing & publicity', 'Other'];
 var TEXT_COLS = { Receipts: ['receiptNo'], Expenses: ['date'] };   // keep as text (no auto date / number conversion)
 var NUM_COLS  = { Receipts: ['amount', 'cash', 'gpay', 'account'], Expenses: ['amount'] };
 var SEED = {"Trivandrum": ["Thiruvananthapuram", "Thiruvananthapuram East", "Kaniyapuram", "Attingal", "Venjaramood", "Nedumangad", "Kattakkada", "Varkala"], "Kollam": ["Kollam", "Karunagappalli", "Pathanapuram"], "Alappuzha": ["Kayamkulam", "Alappuzha", "Kuthiyathodu", "Naduvathu Nagar"], "Kottayam": ["Kottayam", "Kanjirappally", "Erattupetta"], "Idukki": ["Thodupuzha", "Adimaly", "Peerumedu"], "Ernakulam": ["Aluva", "Perumbavoor", "Kothamangalam", "Paravoor", "Ernakulam", "Thripunithura", "Kochi", "Palluruthy", "Kakkanad"], "Thrissur": ["Chavakkad", "Pavaratty", "Kunnamkulam", "Guruvayur", "Thrissur", "Kodungallur", "Kaipamangalam"], "Palakkad": ["Edathanattukara", "Alanallur", "Mannarkkad", "Thachampara", "Olavakode", "Palakkad", "Alathur", "Ottapalam", "Pattambi", "Chittur", "Koppam"], "Malappuram West": ["University", "Peruvallur", "Abdurahman Nager", "Vengara", "Tiroorangadi", "Parappanagadi", "Thanur", "Thanalur", "Kottakkal", "Valavannur", "Randathani", "Moonniyoor"], "Malappuram North": ["Areekode", "Edavannappara", "Pulikkal", "Kondoty", "Mongam", "Malappuram", "Manjeri", "Trikkalangode", "Kavanur", "Anakkayam", "Cherukavu", "Mankada", "Pulpatta", "Keezhuparamba", "Chattipparamba"], "Malappuram East": ["Perintalmanna", "Pandikkad", "Karuvarakund", "Kalikavu", "Amarambalam", "Wandoor", "Edavanna", "Othayi", "Mampad", "Nilamboor", "Chungathara", "Edakkara", "Moothedam", "Angaadipuram", "Aanamangad", "Pattikkad", "Pulamanthole"], "Calicut South": ["Farook", "Kallai", "Beypore", "City", "Mankav", "Medical College", "Karapparamb", "Nanmanda", "Narikuni East", "Atholi", "Kodiyathoor", "Thamarasseri", "Koduvalli", "Mukkam", "Ramanattukara", "Narikuni West"], "Calicut North": ["Balusserry", "Poonur", "Koyilandy", "Payyoli", "Vatakara", "Nadapuram", "Perambra"], "Wayanad": ["Kalpetta", "Bathery", "Mananthavady", "Gudalur"], "Kannur": ["Valapattanam", "Taliparamba", "Irikkoor", "Pazhayangadi", "Payyanur", "Kannur", "Kuthuparamba", "Iritty", "Panoor", "Thalassery", "Kambil", "Chakkarakkal", "Kannavam"], "Kasargode": ["Manjeshwaram", "Kumbala", "Kasaragod", "Uduma", "Kanhangad", "Trikaripur", "Badiyadka", "Cherkkalam", "Uppala", "Bekal", "Parappa"], "Malappuram South": ["Tirur", "Alathiyoor", "Marancheri", "Ponnani", "Koottanad", "Valanjeri", "Changaramkulam", "Paravanna", "Kuttippuram", "Thirunavaya"]};
@@ -65,6 +66,7 @@ function route_(req) {
   // Open to everyone with the link
   if (a === 'districts') return { districts: rows_('Districts'), zones: rows_('Zones') };
   if (a === 'addReceipts') return addReceipts_(req);
+  if (a === 'addExpenses') return addExpenses_(req);
   if (a === 'login') return login_(req.key);
   // Everything below needs an admin session
   requireAdmin_(req.token);
@@ -147,7 +149,6 @@ function zoneName_(district, zone) {
 }
 function addReceipts_(req) {
   var district = districtName_(req.district);
-  var zone = zoneName_(district, req.zone);
   var list = req.receipts;
   if (!list || !list.length) throw new Error('No receipts to save');
   if (list.length > 500) throw new Error('Too many receipts in one go');
@@ -155,6 +156,7 @@ function addReceipts_(req) {
   var seen = {};
   var clean = list.map(function (r) {
     var c = cleanReceipt_(r);
+    c.zone = zoneName_(district, r.zone);
     if (seen[c.receiptNo]) throw new Error('Receipt ' + c.receiptNo + ' is entered twice');
     if (existing.indexOf(c.receiptNo) >= 0) throw new Error('Receipt ' + c.receiptNo + ' is already recorded for ' + district);
     seen[c.receiptNo] = true;
@@ -163,7 +165,7 @@ function addReceipts_(req) {
   var now = new Date().toISOString();
   var by = String(req.submittedBy || '').slice(0, 80);
   clean.forEach(function (c) {
-    c.id = uid_(); c.district = district; c.zone = zone; c.submittedBy = by; c.createdAt = now; c.updatedAt = now;
+    c.id = uid_(); c.district = district; c.submittedBy = by; c.createdAt = now; c.updatedAt = now;
     append_('Receipts', c);
   });
   return { saved: clean.length };
@@ -241,12 +243,34 @@ function deleteZone_(id) {
 }
 
 /* ---------- expenses ---------- */
-function saveExpense_(x, isNew) {
-  var c = { date: String(x.date || '').slice(0, 10), item: String(x.item || '').trim().slice(0, 200), amount: num_(x.amount), note: String(x.note || '').slice(0, 300) };
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(c.date)) throw new Error('Date is required');
+function cleanExpense_(x, needDistrict) {
+  var district = String(x.district || '').trim();
+  if (district) district = districtName_(district);
+  else if (needDistrict) throw new Error('Select a district');
+  var c = {
+    date: String(x.date || '').slice(0, 10), district: district, category: String(x.category || '').trim(),
+    item: String(x.item || '').trim().slice(0, 200), amount: num_(x.amount), note: String(x.note || '').slice(0, 300)
+  };
+  if (!c.date) c.date = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(c.date)) throw new Error('Date is not valid');
   if (!c.item) throw new Error('Expense item is required');
-  if (!(c.amount > 0)) throw new Error('Amount must be more than 0');
-  if (isNew) { c.id = uid_(); c.createdAt = new Date().toISOString(); append_('Expenses', c); return c; }
+  if (CATEGORIES.indexOf(c.category) < 0) throw new Error('Select a category for "' + c.item + '"');
+  if (!(c.amount > 0)) throw new Error('Amount for "' + c.item + '" must be more than 0');
+  return c;
+}
+function addExpenses_(req) {
+  var district = districtName_(req.district);
+  var list = req.expenses;
+  if (!list || !list.length) throw new Error('No expense items to save');
+  if (list.length > 100) throw new Error('Too many items in one go');
+  var clean = list.map(function (x) { x.district = district; x.date = ''; return cleanExpense_(x, true); });
+  var now = new Date().toISOString(), by = String(req.submittedBy || '').slice(0, 80);
+  clean.forEach(function (c) { c.id = uid_(); c.submittedBy = by; c.createdAt = now; append_('Expenses', c); });
+  return { saved: clean.length };
+}
+function saveExpense_(x, isNew) {
+  var c = cleanExpense_(x, false);
+  if (isNew) { c.id = uid_(); c.createdAt = new Date().toISOString(); c.submittedBy = 'admin'; append_('Expenses', c); return c; }
   update_('Expenses', x.id, c);
   return true;
 }

@@ -59,7 +59,20 @@ dialog { border: 1px solid var(--line); border-radius: 14px; background: var(--c
 dialog::backdrop { background: rgba(10,15,30,.55); }
 .banner { background: var(--brand-50); color: var(--navy); border: 1px solid var(--brand-100); border-radius: 10px; padding: 10px 12px; margin-bottom: 16px; font-size: 14px; }
 .foot { border-top: 1px solid var(--line); background: #fff; color: var(--muted); font-size: 13px; padding: 14px 0; text-align: center; }
-.foot img { vertical-align: middle; margin-right: 6px; }
+.foot .wrap { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.foot img { display: block; }
+.foot img.rnd { display: inline-block; vertical-align: middle; margin-right: 4px; }
+.foot b { color: var(--navy); letter-spacing: .08em; text-transform: uppercase; font-size: 12px; }
 @media (max-width: 560px) { .brand span { display: none; } }
 details.dist summary { cursor: pointer; list-style-position: inside; }
 details.dist[open] summary { margin-bottom: 4px; }
+td select { min-width: 120px; padding: 6px 8px; }
+.tour .dots { display: flex; gap: 6px; margin-bottom: 12px; }
+.tour .dots i { width: 22px; height: 5px; border-radius: 3px; background: var(--brand-100); }
+.tour .dots i.on { background: var(--brand); }
+.tour p { margin: 8px 0 18px; line-height: 1.6; }
+nav button[data-v="tour"] { width: 36px; padding: 6px 0; }
+.mother { background: var(--brand-50); border-bottom: 1px solid var(--brand-100); }
+.mother .wrap { display: flex; align-items: center; gap: 10px; min-height: 32px; }
+.mother img { height: 20px; width: auto; display: block; }
+.mother span { border-left: 2px solid var(--red); padding-left: 10px; font: 700 11px/1 Sora, sans-serif; letter-spacing: .12em; text-transform: uppercase; color: var(--navy); }
