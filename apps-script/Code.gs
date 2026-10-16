@@ -154,7 +154,7 @@ function cleanReceipt_(r) {
   if (!out.receiptNo) throw new Error('Receipt number is required');
   if (out.amount < 0 || out.cash < 0 || out.gpay < 0 || out.account < 0) throw new Error('Receipt ' + out.receiptNo + ': amounts cannot be negative');
   if (Math.abs(out.cash + out.gpay + out.account - out.amount) > 0.009)
-    throw new Error('Receipt ' + out.receiptNo + ': Cash + GPay + Account must equal the total amount');
+    throw new Error('Receipt ' + out.receiptNo + ': Cash + UPI + Account must equal the total amount');
   return out;
 }
 function districtName_(name) {

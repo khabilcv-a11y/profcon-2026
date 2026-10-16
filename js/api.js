@@ -44,7 +44,7 @@
     var o = { receiptNo: String(r.receiptNo == null ? '' : r.receiptNo).trim(), amount: num(r.amount), cash: num(r.cash), gpay: num(r.gpay), account: num(r.account) };
     if (!o.receiptNo) throw new Error('Receipt number is required');
     if (o.amount < 0 || o.cash < 0 || o.gpay < 0 || o.account < 0) throw new Error('Receipt ' + o.receiptNo + ': amounts cannot be negative');
-    if (Math.abs(o.cash + o.gpay + o.account - o.amount) > 0.009) throw new Error('Receipt ' + o.receiptNo + ': Cash + GPay + Account must equal the total amount');
+    if (Math.abs(o.cash + o.gpay + o.account - o.amount) > 0.009) throw new Error('Receipt ' + o.receiptNo + ': Cash + UPI + Account must equal the total amount');
     return o;
   }
   var CATS = window.PROFCON_CATEGORIES || [];

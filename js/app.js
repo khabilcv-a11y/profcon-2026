@@ -112,7 +112,7 @@
   /* ---------- quick tour ---------- */
   var STEPS = [
     ['Welcome to PROFCON 2026', 'This takes about 30 seconds. You will use this site to hand in the <b>receipts</b> you are holding and the <b>expenses</b> your district has spent.'],
-    ['1 · Enter receipts', 'Pick your <b>district</b>, type how many receipts you have, and press <b>Add receipt rows</b>. For each receipt fill the receipt number, the total, and how it was handed over: <b>Cash + GPay + Account must equal the total</b>. Choose the <b>zone</b> on each row.'],
+    ['1 · Enter receipts', 'Pick your <b>district</b>, type how many receipts you have, and press <b>Add receipt rows</b>. For each receipt fill the receipt number, the total, and how it was handed over: <b>Cash + UPI + Account must equal the total</b>. Choose the <b>zone</b> on each row.'],
     ['2 · Enter expenses', 'Open <b>Enter expenses</b>, pick your district, then add each item with a <b>category</b> (food, travel allowance, programme expense, transportation cost…) and the <b>amount</b>. Press <b>Add item</b> for more rows.'],
     ['3 · Download and share', 'After you submit, a <b>PDF report</b> of what you entered appears. Download it or press <b>Share PDF</b> to send it to us on WhatsApp or email.'],
     ['4 · Admin only', 'The organisers log in under <b>Admin login</b> to correct entries, manage districts and zones, add central expenses and get the full report.']
@@ -219,14 +219,14 @@
     };
   }
   function draftTable() {
-    $('#rows').innerHTML = '<div class="tablewrap"><table><thead><tr><th>#</th><th>Zone</th><th>Receipt no.</th><th class="n">Total amount</th><th class="n">Cash</th><th class="n">GPay</th><th class="n">Account</th><th>Check</th></tr></thead><tbody>' +
+    $('#rows').innerHTML = '<div class="tablewrap"><table><thead><tr><th>#</th><th>Zone</th><th>Receipt no.</th><th class="n">Total amount</th><th class="n">Cash</th><th class="n">UPI</th><th class="n">Account</th><th>Check</th></tr></thead><tbody>' +
       S.draft.map(function (r, i) {
         return '<tr data-i="' + i + '"><td>' + (i + 1) + '</td><td><select data-f="zone"><option value="">—</option>' + zoneOptions(S.dist, r.zone) + '</select></td>' +
           '<td><input class="no" data-f="receiptNo" value="' + esc(r.receiptNo) + '"></td>' +
           ['amount', 'cash', 'gpay', 'account'].map(function (f) { return '<td><input type="number" min="0" step="0.01" inputmode="decimal" data-f="' + f + '" value="' + esc(r[f]) + '"></td>'; }).join('') +
           '<td class="chk"></td></tr>';
       }).join('') + '</tbody><tfoot><tr><td colspan="3">Total</td><td class="n" id="t-amount"></td><td class="n" id="t-cash"></td><td class="n" id="t-gpay"></td><td class="n" id="t-account"></td><td></td></tr></tfoot></table></div>' +
-      '<p class="note">Cash + GPay + Account must equal the total amount of each receipt. Zone is optional.</p><div class="row end"><button id="clr">Clear</button><button class="primary" id="sub">Submit receipts</button></div>';
+      '<p class="note">Cash + UPI + Account must equal the total amount of each receipt. Zone is optional.</p><div class="row end"><button id="clr">Clear</button><button class="primary" id="sub">Submit receipts</button></div>';
     $('#rows tbody').oninput = function (e) {
       var tr = e.target.closest('tr'); if (!tr || !e.target.dataset.f) return;
       S.draft[tr.dataset.i][e.target.dataset.f] = e.target.value; draftCheck();
@@ -256,15 +256,15 @@
     var nos = S.draft.map(function (r) { return r.receiptNo.trim(); });
     if (nos.some(function (n, i) { return nos.indexOf(n) !== i; })) return toast('A receipt number is repeated in this list', true);
     var t = sum(S.draft.map(numRow)), dist = $('#dist').value, sent = S.draft.map(function (r) { return Object.assign({}, r); });
-    if (!confirm('Submit ' + sent.length + ' receipts for ' + dist + '?\nTotal ₹' + inr(t.amount) + ' (Cash ₹' + inr(t.cash) + ', GPay ₹' + inr(t.gpay) + ', Account ₹' + inr(t.account) + ')')) return;
+    if (!confirm('Submit ' + sent.length + ' receipts for ' + dist + '?\nTotal ₹' + inr(t.amount) + ' (Cash ₹' + inr(t.cash) + ', UPI ₹' + inr(t.gpay) + ', Account ₹' + inr(t.account) + ')')) return;
     busy($('#sub'), api.call('addReceipts', { district: dist, submittedBy: S.by, receipts: sent })).then(function (r) {
       S.draft = [];
       var fname = 'PROFCON-2026-Receipts-' + dist.replace(/\s+/g, '-') + '-' + today() + '.pdf';
       function make() {
         var doc = pdfStart('Receipts Submission Report', 'District: ' + dist + '    Date: ' + dmy(today()) + (S.by ? '    Submitted by: ' + S.by : '')); if (!doc) return null;
-        pdfCards(doc, [['Total collection', t.amount], ['Cash', t.cash], ['GPay', t.gpay], ['Account', t.account]], 114);
+        pdfCards(doc, [['Total collection', t.amount], ['Cash', t.cash], ['UPI', t.gpay], ['Account', t.account]], 114);
         pdfTable(doc, {
-          y: 176, head: ['#', 'Zone', 'Receipt no.', 'Total', 'Cash', 'GPay', 'Account'],
+          y: 176, head: ['#', 'Zone', 'Receipt no.', 'Total', 'Cash', 'UPI', 'Account'],
           body: sent.map(function (x, i) { return [i + 1, x.zone || '', x.receiptNo, inr(x.amount), inr(x.cash), inr(x.gpay), inr(x.account)]; }),
           foot: ['', '', 'Total (' + sent.length + ')', inr(t.amount), inr(t.cash), inr(t.gpay), inr(t.account)],
           cols: { 0: { cellWidth: 28 }, 3: RIGHT, 4: RIGHT, 5: RIGHT, 6: RIGHT }
@@ -362,14 +362,14 @@
 
   function summaryTable(sm, onlyDist) {
     var rows = sm.rows.filter(function (r) { return !onlyDist || r.name === onlyDist; }), sc = scope(sm, onlyDist);
-    return '<div class="tablewrap"><table><thead><tr><th>District</th><th class="n">Receipts</th><th class="n">Collection</th><th class="n">Cash</th><th class="n">GPay</th><th class="n">Account</th><th class="n">Expenses</th><th class="n">Balance</th></tr></thead><tbody>' +
+    return '<div class="tablewrap"><table><thead><tr><th>District</th><th class="n">Receipts</th><th class="n">Collection</th><th class="n">Cash</th><th class="n">UPI</th><th class="n">Account</th><th class="n">Expenses</th><th class="n">Balance</th></tr></thead><tbody>' +
       rows.map(function (r) { return '<tr><td>' + esc(r.name) + '</td><td class="n">' + r.count + '</td><td class="n">' + inr(r.amount) + '</td><td class="n">' + inr(r.cash) + '</td><td class="n">' + inr(r.gpay) + '</td><td class="n">' + inr(r.account) + '</td><td class="n">' + inr(r.exp) + '</td><td class="n">' + inr(r.balance) + '</td></tr>'; }).join('') +
       '</tbody><tfoot><tr><td>Total' + (onlyDist ? '' : ' (incl. central expenses)') + '</td><td class="n">' + sc.total.count + '</td><td class="n">' + inr(sc.total.amount) + '</td><td class="n">' + inr(sc.total.cash) + '</td><td class="n">' + inr(sc.total.gpay) + '</td><td class="n">' + inr(sc.total.account) + '</td><td class="n">' + inr(sc.exp) + '</td><td class="n">' + inr(sc.balance) + '</td></tr></tfoot></table></div>';
   }
   function statsHtml(sm, dist) {
     var sc = scope(sm, dist);
     function st(l, v) { return '<div class="stat"><span>' + l + '</span><b>₹' + inr(v) + '</b></div>'; }
-    return '<div class="stats">' + st('Total collection', sc.total.amount) + st('Cash', sc.total.cash) + st('GPay', sc.total.gpay) + st('Account', sc.total.account) + st('Expenses', sc.exp) + st('Balance', sc.balance) + '</div>';
+    return '<div class="stats">' + st('Total collection', sc.total.amount) + st('Cash', sc.total.cash) + st('UPI', sc.total.gpay) + st('Account', sc.total.account) + st('Expenses', sc.exp) + st('Balance', sc.balance) + '</div>';
   }
   function summaryTab(p) {
     var sm = summary();
@@ -383,7 +383,7 @@
     var t = sum(list);
     p.innerHTML = '<h2>Receipts</h2><div class="card"><div class="grid"><div><label>District</label><select id="rf">' + distOptions(S.rfilter, 'All districts') + '</select></div>' +
       '<div><label>Search receipt no.</label><input id="rs" value="' + esc(S.rsearch) + '"></div></div></div>' +
-      '<div class="tablewrap"><table><thead><tr><th>District</th><th>Zone</th><th>Receipt no.</th><th class="n">Total</th><th class="n">Cash</th><th class="n">GPay</th><th class="n">Account</th><th>By</th><th></th></tr></thead><tbody>' +
+      '<div class="tablewrap"><table><thead><tr><th>District</th><th>Zone</th><th>Receipt no.</th><th class="n">Total</th><th class="n">Cash</th><th class="n">UPI</th><th class="n">Account</th><th>By</th><th></th></tr></thead><tbody>' +
       (list.length ? list.map(function (r) {
         return '<tr><td>' + esc(r.district) + '</td><td>' + esc(r.zone) + '</td><td>' + esc(r.receiptNo) + '</td><td class="n">' + inr(r.amount) + '</td><td class="n">' + inr(r.cash) + '</td><td class="n">' + inr(r.gpay) + '</td><td class="n">' + inr(r.account) + '</td><td>' + esc(r.submittedBy) + '</td><td><button class="sm" data-e="' + esc(r.id) + '">Edit</button> <button class="sm danger" data-d="' + esc(r.id) + '">Delete</button></td></tr>';
       }).join('') : '<tr><td colspan="9" class="empty">No receipts yet.</td></tr>') + '</tbody>' + (list.length ? '<tfoot><tr><td colspan="3">' + list.length + ' receipts</td><td class="n">' + inr(t.amount) + '</td><td class="n">' + inr(t.cash) + '</td><td class="n">' + inr(t.gpay) + '</td><td class="n">' + inr(t.account) + '</td><td colspan="2"></td></tr></tfoot>' : '') + '</table></div>';
@@ -400,10 +400,10 @@
       '<div><label>District</label><select id="e-district">' + distOptions(r.district, 'Select…') + '</select></div>' +
       '<div><label>Zone</label><select id="e-zone"><option value="">No zone</option>' + zoneOptions(r.district, r.zone) + '</select></div>' +
       '<div><label>Receipt no.</label><input id="e-receiptNo" value="' + esc(r.receiptNo) + '"></div>' +
-      ['amount', 'cash', 'gpay', 'account'].map(function (f) { return '<div><label>' + { amount: 'Total amount', cash: 'Cash', gpay: 'GPay', account: 'Account' }[f] + '</label><input type="number" min="0" step="0.01" id="e-' + f + '" value="' + r[f] + '"></div>'; }).join('') +
+      ['amount', 'cash', 'gpay', 'account'].map(function (f) { return '<div><label>' + { amount: 'Total amount', cash: 'Cash', gpay: 'UPI', account: 'Account' }[f] + '</label><input type="number" min="0" step="0.01" id="e-' + f + '" value="' + r[f] + '"></div>'; }).join('') +
       '</div><p class="note" id="e-chk"></p><div class="row end"><button type="button" id="e-x">Cancel</button><button class="primary" id="e-s">Save</button></div></form>';
     dlg.showModal();
-    function chk() { var d = num($('#e-amount').value) - num($('#e-cash').value) - num($('#e-gpay').value) - num($('#e-account').value); $('#e-chk').innerHTML = Math.abs(d) < 0.01 ? '<span class="ok">✓ Cash + GPay + Account match the total</span>' : '<span class="bad">Difference: ₹' + inr(d) + '</span>'; }
+    function chk() { var d = num($('#e-amount').value) - num($('#e-cash').value) - num($('#e-gpay').value) - num($('#e-account').value); $('#e-chk').innerHTML = Math.abs(d) < 0.01 ? '<span class="ok">✓ Cash + UPI + Account match the total</span>' : '<span class="bad">Difference: ₹' + inr(d) + '</span>'; }
     dlg.oninput = chk; chk();
     $('#e-district').onchange = function () { $('#e-zone').innerHTML = '<option value="">No zone</option>' + zoneOptions(this.value, ''); };
     $('#e-x').onclick = function () { dlg.close(); };
@@ -537,10 +537,10 @@
   function buildPdf(R) {
     var sm = summary(), sc = scope(sm, R.dist), rows = sm.rows.filter(function (r) { return !R.dist || r.name === R.dist; });
     var doc = pdfStart('Collection & Expense Report 2026', 'Generated: ' + dmy(today()) + '    Scope: ' + (R.dist || 'All districts')); if (!doc) return null;
-    pdfCards(doc, [['Collection', sc.total.amount], ['Cash', sc.total.cash], ['GPay', sc.total.gpay], ['Account', sc.total.account], ['Expenses', sc.exp], ['Balance', sc.balance]], 114);
+    pdfCards(doc, [['Collection', sc.total.amount], ['Cash', sc.total.cash], ['UPI', sc.total.gpay], ['Account', sc.total.account], ['Expenses', sc.exp], ['Balance', sc.balance]], 114);
     pdfHeading(doc, 'District-wise collection & expenses', 184);
     var y = pdfTable(doc, {
-      y: 192, font: 8.5, head: ['District', 'Receipts', 'Collection', 'Cash', 'GPay', 'Account', 'Expenses', 'Balance'],
+      y: 192, font: 8.5, head: ['District', 'Receipts', 'Collection', 'Cash', 'UPI', 'Account', 'Expenses', 'Balance'],
       body: rows.map(function (r) { return [r.name, r.count, inr(r.amount), inr(r.cash), inr(r.gpay), inr(r.account), inr(r.exp), inr(r.balance)]; }),
       foot: ['Total', sc.total.count, inr(sc.total.amount), inr(sc.total.cash), inr(sc.total.gpay), inr(sc.total.account), inr(sc.exp), inr(sc.balance)],
       cols: { 1: RIGHT, 2: RIGHT, 3: RIGHT, 4: RIGHT, 5: RIGHT, 6: RIGHT, 7: RIGHT }
@@ -553,7 +553,7 @@
         if (yy > 740) { doc.addPage(); yy = 50; }
         pdfHeading(doc, d.name + ' - receipts', yy);
         y = pdfTable(doc, {
-          y: yy + 8, pad: 3.5, head: ['#', 'Zone', 'Receipt no.', 'Total', 'Cash', 'GPay', 'Account'],
+          y: yy + 8, pad: 3.5, head: ['#', 'Zone', 'Receipt no.', 'Total', 'Cash', 'UPI', 'Account'],
           body: list.map(function (r, i) { return [i + 1, r.zone || '', r.receiptNo, inr(r.amount), inr(r.cash), inr(r.gpay), inr(r.account)]; }),
           foot: ['', '', 'Total (' + d.count + ')', inr(d.amount), inr(d.cash), inr(d.gpay), inr(d.account)],
           cols: { 0: { cellWidth: 28 }, 3: RIGHT, 4: RIGHT, 5: RIGHT, 6: RIGHT }

@@ -18,7 +18,7 @@ Edit `js/config.js`, set `API_URL: 'https://script.google.com/macros/s/.../exec'
 Connect this GitHub repo (its own repo, separate from any other project), build command empty, output directory `/`. The app is then at the site root.
 
 ## Using it
-- **Enter receipts** (no login): district → number of receipts in hand → fill Receipt no., Total, Cash, GPay, Account per row → Submit. Cash + GPay + Account must equal the total.
+- **Enter receipts** (no login): district → number of receipts in hand → fill Receipt no., Total, Cash, UPI, Account per row → Submit. Cash + UPI + Account must equal the total.
 - **Admin login** (default key `1234`): Summary, edit/delete receipts, add/rename/delete districts, PROFCON expenses, report PDF (download / share / email), and **Settings → change key**. Change the default key straight away.
 - **Email PDF** sends from your Google account (Gmail limit ~100 mails/day).
 - After editing Code.gs: **Deploy → Manage deployments → ✏ → New version → Deploy** (URL stays the same).
