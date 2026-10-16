@@ -31,10 +31,16 @@ function setup() {
   });
   var first = ss.getSheetByName('Sheet1');
   if (first && first.getLastRow() === 0 && ss.getSheets().length > 1) ss.deleteSheet(first);
-  if (!rows_('Districts').length) Object.keys(SEED).forEach(function (d) {
+  // Fresh start (or upgrading from the old district-only list): load districts + zones.
+  // Never touches the data once any receipts exist.
+  if (!rows_('Zones').length && !rows_('Receipts').length) {
+    var dsh = sheet_('Districts');
+    if (dsh.getLastRow() > 1) dsh.deleteRows(2, dsh.getLastRow() - 1);
+    Object.keys(SEED).forEach(function (d) {
     append_('Districts', { id: uid_(), name: d });
     SEED[d].forEach(function (z) { append_('Zones', { id: uid_(), district: d, name: z }); });
   });
+  }
   if (!getSetting_('keyHash')) setKey_(DEFAULT_KEY);
 }
 
